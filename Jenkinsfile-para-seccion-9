@@ -1,0 +1,39 @@
+pipeline {
+    agent none
+
+    stages {
+        stage('Importar Repositorio') {
+            agent any
+            steps {
+                git 'https://github.com/tfg2asircanaveral2024/6-proyecto-powershell-base.git'
+            }
+        }
+
+        // es necesario realizar todas las acciones de Powershell en una misma fase para que el contenedor donde se realiza el procesamiento sea siempre el mismo. De lo contrario, tras instalar las dependencias y pasar a la siguiente fase, éstas se perderían y la Pipeline fallaría siempre
+        stage('Procesamiento con Powershell') {
+            agent {
+                docker {
+                    image 'tfg2asircanaveral2024/pwsh:psdepend-pester-psscriptanalyzer'
+                    args '--user root'
+                }
+            }
+
+            steps {
+                // Dependencias (PSDepend)
+                pwsh 'Invoke-PSDepend -Path ./Dependencias -Force -ErrorAction Stop'
+                // Tests (Pester)
+                pwsh 'Invoke-Pester'
+                // Tests (PSScriptAnalyzer)
+                pwsh './Gestionar-Datos.ScriptAnalyzer.ps1'
+            }
+        }
+        
+        stage('Despliegue a la rama Produccion de GitHub') {
+            agent any
+            steps {
+                sh 'chmod u+x script-despliegue-git.sh'                
+                sh './script-despliegue-git.sh'
+            }
+        }
+    }
+}
